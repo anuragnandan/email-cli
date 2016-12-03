@@ -1,0 +1,109 @@
+#!/usr/local/bin/php
+<?php
+require_once dirname(__FILE__) . '/GetOpt.php';
+$options = _getopt(NULL, array(
+          'file::',
+          'subject::',
+          'to::',
+					'body::',
+					'help',
+        ));
+
+if(
+  !isset($options['file']) && 
+  !isset($options['to'])  &&
+  !isset($options['subject']) && 
+  !isset($options['body']) && 
+  !isset($options['help']) 
+)
+{
+  echo "Use --help to see the man page.\n";
+  exit();
+}
+
+if(isset($options['help']))
+{
+  echo "This process is used to email a file from command line if you provide the file and the destination as cli arguments.\n";
+  echo "\n--file:       Full file path that you intend to send.";
+  echo "\n--to:         Email address of the destination.";
+  echo "\n--subject:    Email subject.";
+  echo "\n--body:       Email body.";
+  echo "\n";
+  exit();
+}
+
+if(!isset($options['file']))
+{
+  echo "I don't know what to send. Use --file \n";
+  exit();
+}
+elseif(!isset($options['to']))
+{
+  echo "I don't know who to send to. Use --email\n";
+  exit();
+}
+$subject = "";
+$body = "";
+
+if(isset($options['subject']))
+  $subject = $options['subject'];
+
+if(isset($options['body']))
+  $body = $options['body'];
+
+$file = $options['file'];
+$email = $options['to'];
+
+if(strpos($file,"/") === false)
+  $file = dirname(__FILE__)."/$file";
+
+$file_parsed = explode("/",$file);
+$filename = $file_parsed[count($file_parsed) - 1];
+$path = substr($file,0,strrpos($file,"/"))."/";
+$from_mail = "system@root.com";
+$from_name = "System";
+$replyto = "noreply@root.com";
+
+mail_attachment($filename,$path,$email, $from_mail, $from_name, $replyto, $subject, "",$filename);
+
+function mail_attachment($filename, $path, $mailto, $from_mail, $from_name, $replyto, $subject, $message, $defaultFileName)
+{
+
+    $eol = PHP_EOL;
+    $file = $path.$filename;
+    $file_size = filesize($file);
+    $handle = fopen($file, "r");
+    $content = fread($handle, $file_size);
+    fclose($handle);
+    $content = chunk_split(base64_encode($content));
+    $uid = md5(uniqid(time()));
+    $name = basename($file);
+    $header = "From: ".$from_name." <".$from_mail.">$eol";
+    $header .= "Reply-To: ".$replyto."$eol";
+    $header .= "MIME-Version: 1.0$eol";
+    $header .= "Content-Type: multipart/mixed; boundary=\"".$uid."\"$eol$eol";
+    $header .= "This is a multi-part message in MIME format.$eol";
+    $header .= "--".$uid."$eol";
+    $header .= "Content-type:text/plain; charset=iso-8859-1$eol";
+    $header .= "Content-Transfer-Encoding: 7bit$eol$eol";
+    $header .= $message."$eol$eol";
+    $header .= "--".$uid."$eol";
+    $header .= "Content-Type: application/csv; name=\"".$filename."\"$eol"; // use different content types here
+    $header .= "Content-Transfer-Encoding: base64$eol";
+    $header .= "Content-Disposition: attachment; filename=\"".$defaultFileName."\"$eol$eol";
+    $header .= $content."$eol$eol";
+    $header .= "--".$uid."--";
+
+    $mailto = str_ireplace(";", ",", $mailto);
+	  if (mail($mailto, $subject, "", $header, "-f $from_name"))
+    {
+      echo "File $file emailed.\n";
+            //mylog("File '$file' ($file_size bytes) emailed to '$mailto'");
+    }
+    else
+    {
+          //mylog("ERROR emailing file '$file' ($file_size bytes) to '$mailto'!!", LOG_CRIT);
+      echo "File not emailed.\n";
+    }
+}
+?>
